@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SonicStream V2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+    /* The Apple Music Frosted Glass Effect */
+    .glass {
+      background: rgba(24, 24, 27, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .glass-heavy {
+      background: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+    }
+    ::-webkit-scrollbar { width: 0px; background: transparent; }
+    
+    /* Smooth range slider styling */
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      background: #f43f5e;
+      box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col">
+
+  <!-- DYNAMIC AMBIENT BACKGROUND -->
+  <div id="ambientBg" class="fixed inset-0 z-[-1] bg-cover bg-center opacity-40 blur-[80px] transition-all duration-1000 scale-110"></div>
+  <div class="fixed inset-0 z-[-1] bg-gradient-to-b from-zinc-950/40 to-zinc-950/90 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 border-b border-zinc-800/40 glass px-4 py-4">
+    <div class="max-w-xl mx-auto flex items-center gap-3">
+      <div class="relative flex-1">
+        <input 
+          id="searchInput" 
+          type="text" 
+          placeholder="What do you want to listen to?" 
+          class="w-full bg-zinc-900/50 border border-zinc-700/50 rounded-2xl px-4 py-3.5 pl-11 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all text-white placeholder-zinc-400 shadow-inner"
+        />
+        <svg class="w-5 h-5 text-zinc-400 absolute left-4 top-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-xl mx-auto w-full px-4 py-6 pb-32 flex-1">
+    
+    <!-- Empty State -->
+    <div id="emptyState" class="flex flex-col items-center justify-center py-20 opacity-60">
+      <svg class="w-16 h-16 text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+      <p class="text-zinc-400 font-medium">Search to start streaming</p>
+    </div>
+
+    <div id="status" class="hidden text-center py-12 text-rose-400 text-sm animate-pulse font-medium">
+      Connecting to server...
+    </div>
+
+    <!-- Results Grid -->
+    <div id="resultsGrid" class="flex flex-col gap-2"></div>
+  </main>
+
+  <!-- ========================================== -->
+  <!-- BOTTOM MINI PLAYER -->
+  <!-- ========================================== -->
+  <div id="miniPlayer" class="fixed bottom-4 left-4 right-4 max-w-xl mx-auto border border-zinc-700/50 glass rounded-2xl p-2 z-40 transition-transform duration-500 translate-y-[150%] shadow-2xl cursor-pointer hover:bg-zinc-800/50" onclick="openFullScreenPlayer()">
+    <div class="flex items-center justify-between gap-3">
+      <img id="miniThumb" src="" class="w-12 h-12 rounded-xl object-cover shadow-md shrink-0" />
+      <div class="min-w-0 flex-1">
+        <p id="miniTitle" class="text-sm font-bold truncate text-white">Title</p>
+        <p id="miniArtist" class="text-xs text-zinc-400 truncate">Artist</p>
+      </div>
+      <button id="miniPlayBtn" class="bg-white/10 text-white p-3 rounded-full hover:bg-white/20 transition-all shadow shrink-0 mr-1" onclick="event.stopPropagation(); togglePlay();">
+          <svg id="miniPlayIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="miniPauseIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+    </div>
+    <!-- Mini Progress Line -->
+    <div class="absolute bottom-0 left-4 right-4 h-0.5 bg-zinc-700/50 rounded-full overflow-hidden">
+      <div id="miniProgress" class="h-full bg-rose-500 w-0 transition-all duration-150"></div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- FULL SCREEN PLAYER (Hidden by default) -->
+  <!-- ========================================== -->
+  <div id="fullScreenPlayer" class="fixed inset-0 z-50 glass-heavy flex flex-col transition-transform duration-500 translate-y-full">
+    
+    <!-- Top Bar -->
+    <div class="px-6 py-6 flex justify-between items-center">
+      <button onclick="closeFullScreenPlayer()" class="p-2 text-zinc-400 hover:text-white rounded-full bg-white/5 active:scale-95 transition-all">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <span class="text-xs font-bold tracking-widest text-zinc-500 uppercase">Now Playing</span>
+      <button class="p-2 text-zinc-400 hover:text-white rounded-full bg-white/5 active:scale-95 transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+      </button>
+    </div>
+
+    <!-- Big Album Art -->
+    <div class="flex-1 flex items-center justify-center px-8 py-4">
+      <img id="fullThumb" src="" class="w-full aspect-square max-w-[350px] rounded-3xl object-cover shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-transform duration-500 scale-95" />
+    </div>
+
+    <!-- Player Controls Area -->
+    <div class="px-8 pb-12 w-full max-w-md mx-auto">
+      
+      <!-- Titles -->
+      <div class="mb-8 text-center">
+        <h2 id="fullTitle" class="text-2xl font-bold text-white mb-1 truncate">Title</h2>
+        <p id="fullArtist" class="text-lg text-rose-400/90 truncate font-medium">Artist</p>
+      </div>
+
+      <!-- Scrubber -->
+      <div class="mb-8">
+        <input id="progressBar" type="range" min="0" max="100" value="0" class="w-full h-1.5 bg-zinc-700/50 rounded-lg appearance-none cursor-pointer accent-rose-500">
+        <div class="flex justify-between mt-2 text-xs font-medium text-zinc-400">
+          <span id="currentTime">0:00</span>
+          <span id="totalDuration">0:00</span>
+        </div>
+      </div>
+
+      <!-- Main Buttons -->
+      <div class="flex items-center justify-center gap-8">
+        <button class="text-zinc-400 hover:text-white active:scale-90 transition-all">
+          <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+        </button>
+        
+        <button onclick="togglePlay()" class="bg-rose-500 text-white p-5 rounded-full hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(244,63,94,0.4)]">
+          <svg id="fullPlayIcon" class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="fullPauseIcon" class="w-8 h-8 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+
+        <button class="text-zinc-400 hover:text-white active:scale-90 transition-all">
+          <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="audioElement" referrerpolicy="no-referrer"></audio>
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    const statusText = document.getElementById('status');
+    const resultsGrid = document.getElementById('resultsGrid');
+    const emptyState = document.getElementById('emptyState');
+    const ambientBg = document.getElementById('ambientBg');
+    const audioElement = document.getElementById('audioElement');
+    
+    // Mini Player Elements
+    const miniPlayer = document.getElementById('miniPlayer');
+    const miniThumb = document.getElementById('miniThumb');
+    const miniTitle = document.getElementById('miniTitle');
+    const miniArtist = document.getElementById('miniArtist');
+    const miniProgress = document.getElementById('miniProgress');
+    const miniPlayIcon = document.getElementById('miniPlayIcon');
+    const miniPauseIcon = document.getElementById('miniPauseIcon');
+
+    // Full Player Elements
+    const fullScreenPlayer = document.getElementById('fullScreenPlayer');
+    const fullThumb = document.getElementById('fullThumb');
+    const fullTitle = document.getElementById('fullTitle');
+    const fullArtist = document.getElementById('fullArtist');
+    const fullPlayIcon = document.getElementById('fullPlayIcon');
+    const fullPauseIcon = document.getElementById('fullPauseIcon');
+    const progressBar = document.getElementById('progressBar');
+    const currentTimeEl = document.getElementById('currentTime');
+    const totalDurationEl = document.getElementById('totalDuration');
+
+    let currentTrackData = null;
+
+    searchInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        const q = searchInput.value.trim();
+        if (!q) return;
+
+        searchInput.blur();
+        emptyState.style.display = 'none';
+        statusText.classList.remove('hidden');
+        statusText.innerText = "Searching servers...";
+        resultsGrid.innerHTML = '';
+
+        try {
+          const res = await fetch(`http://127.0.0.1:8000/api/search?q=${encodeURIComponent(q)}`);
+          const data = await res.json();
+          statusText.classList.add('hidden');
+
+          if (!data.results || data.results.length === 0) {
+            statusText.classList.remove('hidden');
+            statusText.innerText = "No songs found.";
+            return;
+          }
+
+          data.results.forEach((track, index) => {
+            const card = document.createElement('div');
+            // Staggered animation effect
+            card.style.animation = `fadeIn 0.5s ease forwards ${index * 0.1}s`;
+            card.style.opacity = '0';
+            card.className = "flex items-center gap-4 p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer transition-all active:scale-[0.98]";
+            card.innerHTML = `
+              <img src="${track.thumbnail}" class="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
+              <div class="min-w-0 flex-1">
+                <h3 class="text-sm font-bold text-white truncate">${track.title}</h3>
+                <p class="text-xs text-zinc-400 truncate mt-0.5">${track.uploader}</p>
+              </div>
+              <button class="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white shrink-0">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+            `;
+            card.onclick = () => playTrack(track);
+            resultsGrid.appendChild(card);
+          });
+        } catch (err) {
+          statusText.classList.remove('hidden');
+          statusText.innerText = "Error contacting server. Is Pydroid running?";
+        }
+      }
+    });
+
+    async function playTrack(track) {
+      statusText.classList.remove('hidden');
+      statusText.innerText = "Decrypting high-quality stream...";
+      
+      // Update UI immediately for perceived speed
+      ambientBg.style.backgroundImage = `url(${track.thumbnail})`;
+      miniThumb.src = track.thumbnail;
+      miniTitle.innerText = track.title;
+      miniArtist.innerText = track.uploader;
+      
+      fullThumb.src = track.thumbnail;
+      fullTitle.innerText = track.title;
+      fullArtist.innerText = track.uploader;
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/stream?video_id=${track.id}`);
+        const streamData = await res.json();
+        statusText.classList.add('hidden');
+
+        audioElement.src = streamData.stream_url;
+        audioElement.play();
+
+        miniPlayer.classList.remove('translate-y-[150%]');
+        setPlayState(true);
+      } catch (err) {
+        statusText.classList.remove('hidden');
+        statusText.innerText = "Stream blocked. Try another track.";
+      }
+    }
+
+    function openFullScreenPlayer() {
+      fullScreenPlayer.classList.remove('translate-y-full');
+      setTimeout(() => fullThumb.classList.remove('scale-95'), 100);
+    }
+
+    function closeFullScreenPlayer() {
+      fullThumb.classList.add('scale-95');
+      fullScreenPlayer.classList.add('translate-y-full');
+    }
+
+    function setPlayState(isPlaying) {
+      if (isPlaying) {
+        miniPlayIcon.classList.add('hidden');
+        miniPauseIcon.classList.remove('hidden');
+        fullPlayIcon.classList.add('hidden');
+        fullPauseIcon.classList.remove('hidden');
+        fullThumb.style.transform = 'scale(1)';
+      } else {
+        miniPlayIcon.classList.remove('hidden');
+        miniPauseIcon.classList.add('hidden');
+        fullPlayIcon.classList.remove('hidden');
+        fullPauseIcon.classList.add('hidden');
+        fullThumb.style.transform = 'scale(0.95)';
+      }
+    }
+
+    function togglePlay() {
+      if (audioElement.paused) {
+        audioElement.play();
+        setPlayState(true);
+      } else {
+        audioElement.pause();
+        setPlayState(false);
+      }
+    }
+
+    audioElement.ontimeupdate = () => {
+      if (!isNaN(audioElement.duration)) {
+        const percent = (audioElement.currentTime / audioElement.duration) * 100;
+        progressBar.value = percent;
+        miniProgress.style.width = `${percent}%`;
+        currentTimeEl.innerText = formatTime(audioElement.currentTime);
+        totalDurationEl.innerText = formatTime(audioElement.duration);
+      }
+    };
+
+    progressBar.oninput = () => {
+      if (!isNaN(audioElement.duration)) {
+        audioElement.currentTime = (progressBar.value / 100) * audioElement.duration;
+      }
+    };
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // Add fade animation style dynamically
+    const style = document.createElement('style');
+    style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
